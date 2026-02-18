@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fizika Oyunu: Nyutonun Topu (Pro)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+        body {
+            font-family: 'Roboto', sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+        canvas {
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            cursor: crosshair;
+        }
+        .control-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+        /* Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 2px;
+        }
+        .wind-arrow {
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+    </style>
+</head>
+<body class="bg-slate-200 h-screen flex flex-col items-center justify-center p-2 md:p-4 overflow-hidden">
+
+    <!-- Header -->
+    <div class="w-full max-w-5xl flex justify-between items-end mb-3 px-2">
+        <div>
+            <h1 class="text-2xl md:text-4xl font-black text-slate-800 tracking-tight">Nyutonun Topu <span class="text-blue-600">Pro</span></h1>
+            <p class="text-xs md:text-sm text-slate-500 font-medium">Küləyi nəzərə al və hədəfi vur!</p>
+        </div>
+        <div class="flex gap-4">
+            <!-- Külək Göstəricisi -->
+            <div class="hidden md:flex flex-col items-center bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200">
+                <span class="text-xs text-slate-400 uppercase font-bold">Külək</span>
+                <div class="flex items-center gap-2 mt-1">
+                    <span id="windText" class="font-bold text-slate-700">0 m/s</span>
+                    <svg id="windIcon" class="w-5 h-5 text-blue-500 wind-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </div>
+            </div>
+            <!-- Xal -->
+            <div class="bg-white px-6 py-2 rounded-xl shadow-md border border-slate-200 flex flex-col items-center min-w-[100px]">
+                <span class="text-slate-400 text-xs uppercase font-bold tracking-wider">Xal</span>
+                <div id="scoreDisplay" class="text-3xl font-black text-blue-600 leading-none mt-1">0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Oyun Sahəsi -->
+    <div class="relative w-full max-w-5xl aspect-[16/9] md:aspect-[2/1] shadow-2xl rounded-2xl overflow-hidden bg-white border-4 border-white">
+        <canvas id="gameCanvas" class="w-full h-full block"></canvas>
+        
+        <!-- Mobil üçün Külək Göstəricisi (Overlay) -->
+        <div class="absolute top-4 right-4 md:hidden bg-white/80 backdrop-blur px-3 py-1.5 rounded-lg shadow-sm border border-slate-200/50 flex items-center gap-2">
+            <span class="text-xs font-bold text-slate-600">💨</span>
+            <span id="windTextMobile" class="text-xs font-bold text-slate-800">0</span>
+            <svg id="windIconMobile" class="w-4 h-4 text-blue-600 wind-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+        </div>
+
+        <!-- Mesaj Qutusu -->
+        <div id="messageBox" class="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300 z-10">
+            <div class="bg-white px-8 py-6 rounded-2xl shadow-2xl transform scale-90 transition-transform duration-300 text-center max-w-xs mx-4">
+                <div id="msgIcon" class="text-5xl mb-3">🎯</div>
+                <h3 id="messageTitle" class="text-2xl font-black text-slate-800 mb-1">Möhtəşəm!</h3>
+                <p id="messageSub" class="text-slate-500 font-medium">+100 Xal qazandınız</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- İdarəetmə Paneli -->
+    <div class="control-panel w-full max-w-5xl mt-4 p-4 rounded-2xl shadow-lg border border-slate-200 grid grid-cols-1 md:grid-cols-[1.5fr_1.5fr_1fr] gap-6 items-center">
+        
+        <!-- Bucaq -->
+        <div class="space-y-3">
+            <div class="flex justify-between items-center">
+                <label class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    Atış Bucağı
+                </label>
+                <span id="angleVal" class="text-sm font-mono font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">45°</span>
+            </div>
+            <input type="range" id="angleSlider" min="0" max="90" value="45" class="w-full">
+        </div>
+
+        <!-- Güc -->
+        <div class="space-y-3">
+            <div class="flex justify-between items-center">
+                <label class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    Atış Gücü
+                </label>
+                <span id="powerVal" class="text-sm font-mono font-bold text-red-600 bg-red-50 px-2 py-1 rounded-md border border-red-100">50%</span>
+            </div>
+            <input type="range" id="powerSlider" min="10" max="100" value="50" class="w-full">
+        </div>
+
+        <!-- Düymələr -->
+        <div class="flex gap-2 h-full items-end">
+            <button id="fireBtn" class="flex-1 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-[0_4px_0_rgb(30,58,138)] active:shadow-none active:translate-y-[4px] transition-all flex items-center justify-center gap-2">
+                <span>ATƏŞ</span> 🚀
+            </button>
+            <button id="resetBtn" class="w-12 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3.5 rounded-xl shadow-[0_4px_0_rgb(203,213,225)] active:shadow-none active:translate-y-[4px] transition-all flex items-center justify-center" title="Yenidən Başla">
+                ↻
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- Setup ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI Refs
+        const angleSlider = document.getElementById('angleSlider');
+        const powerSlider = document.getElementById('powerSlider');
+        const angleVal = document.getElementById('angleVal');
+        const powerVal = document.getElementById('powerVal');
+        const fireBtn = document.getElementById('fireBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const messageBox = document.getElementById('messageBox');
+        const messageTitle = document.getElementById('messageTitle');
+        const messageSub = document.getElementById('messageSub');
+        const msgIcon = document.getElementById('msgIcon');
+        const windText = document.getElementById('windText');
+        const windIcon = document.getElementById('windIcon');
+        const windTextMobile = document.getElementById('windTextMobile');
+        const windIconMobile = document.getElementById('windIconMobile');
+
+        // Game State
+        let score = 0;
+        let isFiring = false;
+        let wind = 0; // Külək sürəti (-10 to 10)
+        let particles = []; // Partlayış effektləri üçün
+        let clouds = []; // Buludlar
+
+        // Physics Constants
+        const GRAVITY = 0.4;
+        const GROUND_RATIO = 0.15;
+
+        // Objects
+        let cannon = { x: 60, y: 0, width: 40, height: 20, angle: 45 };
+        let ball = { x: 0, y: 0, radius: 7, vx: 0, vy: 0, trail: [] };
+        let target = { x: 0, y: 0, radius: 25, hit: false };
+
+        // Audio Context (Sadə Səslər üçün)
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'fire') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'hit') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            } else if (type === 'fail') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            }
+        }
+
+        // --- Core Functions ---
+
+        function initClouds() {
+            clouds = [];
+            for(let i=0; i<5; i++) {
+                clouds.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * (canvas.height * 0.4),
+                    speed: 0.2 + Math.random() * 0.3,
+                    size: 30 + Math.random() * 30
+                });
+            }
+        }
+
+        function updateWind() {
+            // Külək -5 ilə +5 arasında dəyişir (şərq və ya qərb)
+            wind = (Math.random() * 10 - 5).toFixed(1);
+            
+            const windAbs = Math.abs(wind);
+            const windDir = wind > 0 ? 0 : 180;
+            
+            windText.textContent = `${windAbs} m/s`;
+            windTextMobile.textContent = windAbs;
+            
+            // Külək oxunu fırlat
+            const transform = `rotate(${windDir}deg)`;
+            windIcon.style.transform = transform;
+            windIconMobile.style.transform = transform;
+            
+            // Rəng dəyişimi
+            const colorClass = windAbs > 3 ? 'text-red-500' : 'text-blue-500';
+            windIcon.className.baseVal = `w-5 h-5 wind-arrow ${colorClass}`;
+        }
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            
+            const groundY = canvas.height * (1 - GROUND_RATIO);
+            cannon.y = groundY - 18;
+            
+            if (target.x === 0) respawnTarget();
+            if (clouds.length === 0) initClouds();
+            if (!isFiring) resetBall();
+        }
+
+        function respawnTarget() {
+            const groundY = canvas.height * (1 - GROUND_RATIO);
+            const minX = canvas.width * 0.4;
+            const maxX = canvas.width - 60;
+            target.x = Math.random() * (maxX - minX) + minX;
+            target.y = groundY - target.radius - 5; // Bir az havada olsun
+            target.hit = false;
+            updateWind();
+        }
+
+        function resetBall() {
+            ball.x = cannon.x;
+            ball.y = cannon.y;
+            ball.vx = 0;
+            ball.vy = 0;
+            ball.trail = [];
+            isFiring = false;
+            
+            fireBtn.disabled = false;
+            fireBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+            fireBtn.innerHTML = "<span>ATƏŞ</span> 🚀";
+            
+            hideMessage();
+            draw();
+        }
+
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    life: 1.0,
+                    color: color
+                });
+            }
+        }
+
+        function showMessage(title, text, icon) {
+            messageTitle.textContent = title;
+            messageSub.textContent = text;
+            msgIcon.textContent = icon;
+            
+            const box = document.getElementById('messageBox');
+            box.classList.remove('opacity-0', 'pointer-events-none');
+            const inner = box.querySelector('div');
+            inner.classList.remove('scale-90');
+            inner.classList.add('scale-100');
+        }
+
+        function hideMessage() {
+            const box = document.getElementById('messageBox');
+            box.classList.add('opacity-0', 'pointer-events-none');
+            const inner = box.querySelector('div');
+            inner.classList.remove('scale-100');
+            inner.classList.add('scale-90');
+        }
+
+        function fire() {
+            if (isFiring) return;
+            playSound('fire');
+            isFiring = true;
+            fireBtn.disabled = true;
+            fireBtn.classList.add('opacity-70', 'cursor-not-allowed');
+            fireBtn.innerHTML = "UÇUR... ⏱";
+
+            const angleRad = -cannon.angle * (Math.PI / 180);
+            const power = parseInt(powerSlider.value) * 0.35;
+
+            // Lülənin ucundan çıxış
+            const barrelLen = 40;
+            ball.x = cannon.x + Math.cos(angleRad) * barrelLen;
+            ball.y = cannon.y + Math.sin(angleRad) * barrelLen;
+            
+            ball.vx = Math.cos(angleRad) * power;
+            ball.vy = Math.sin(angleRad) * power;
+
+            loop();
+        }
+
+        // --- Main Loop ---
+
+        function loop() {
+            // Background Animation (Clouds)
+            clouds.forEach(c => {
+                c.x += c.speed + (wind * 0.05); // Buludlar da küləklə hərəkət edir
+                if(c.x > canvas.width + 50) c.x = -50;
+                if(c.x < -50) c.x = canvas.width + 50;
+            });
+
+            if (isFiring) {
+                // Physics
+                ball.vy += GRAVITY;
+                ball.vx += wind * 0.005; // Külək təsiri (zəif)
+                
+                ball.x += ball.vx;
+                ball.y += ball.vy;
+
+                // Trail logic
+                if (ball.trail.length === 0 || 
+                    Math.hypot(ball.x - ball.trail[ball.trail.length-1].x, ball.y - ball.trail[ball.trail.length-1].y) > 5) {
+                    ball.trail.push({x: ball.x, y: ball.y});
+                    if (ball.trail.length > 40) ball.trail.shift();
+                }
+
+                const groundY = canvas.height * (1 - GROUND_RATIO);
+
+                // Collision Detection: Target
+                const dx = ball.x - target.x;
+                const dy = ball.y - target.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                if (!target.hit && dist < (target.radius + ball.radius)) {
+                    target.hit = true;
+                    score += 10 + Math.abs(Math.round(wind)); // Küləkli havada daha çox xal
+                    scoreDisplay.textContent = score;
+                    createParticles(target.x, target.y, "#ef4444");
+                    playSound('hit');
+                    showMessage("TAM MƏRKƏZƏ! 🎯", `${Math.abs(Math.round(wind)) > 2 ? 'Küləkli hava bonusu!' : 'Əla atış!'}`, "🏆");
+                    
+                    isFiring = false;
+                    setTimeout(() => {
+                        respawnTarget();
+                        resetBall();
+                    }, 2500);
+                }
+
+                // Collision Detection: Ground
+                if (ball.y + ball.radius >= groundY) {
+                    ball.y = groundY - ball.radius;
+                    isFiring = false;
+                    createParticles(ball.x, ball.y, "#94a3b8"); // Dust
+                    playSound('fail');
+                    showMessage("YENİDƏN CƏHD ET", "Yerə dəydi.", "💨");
+                    setTimeout(resetBall, 1500);
+                }
+
+                // Bounds
+                if (ball.x > canvas.width + 100 || ball.x < -100) {
+                    isFiring = false;
+                    showMessage("ÇOX UZAĞA", "Top meydandan çıxdı.", "🔭");
+                    setTimeout(resetBall, 1500);
+                }
+            }
+
+            // Particles update
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2; // Gravity for particles
+                p.life -= 0.03;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        function draw() {
+            // Sky Gradient
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, "#87CEEB");
+            grad.addColorStop(1, "#E0F7FA");
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Clouds
+            ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+            clouds.forEach(c => {
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, c.size, 0, Math.PI * 2);
+                ctx.arc(c.x + c.size * 0.5, c.y - c.size * 0.2, c.size * 0.8, 0, Math.PI * 2);
+                ctx.arc(c.x - c.size * 0.5, c.y - c.size * 0.2, c.size * 0.8, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            const groundY = canvas.height * (1 - GROUND_RATIO);
+
+            // Draw Ground
+            ctx.fillStyle = "#4ade80"; // Light grass
+            ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+            ctx.fillStyle = "#22c55e"; // Grass Top Border
+            ctx.fillRect(0, groundY, canvas.width, 10);
+
+            // Draw Target (Bullseye)
+            if (!target.hit) {
+                // Outer Ring
+                ctx.beginPath();
+                ctx.arc(target.x, target.y, target.radius, 0, Math.PI*2);
+                ctx.fillStyle = "white";
+                ctx.fill();
+                ctx.strokeStyle = "#ef4444";
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                
+                // Middle Ring
+                ctx.beginPath();
+                ctx.arc(target.x, target.y, target.radius * 0.6, 0, Math.PI*2);
+                ctx.fillStyle = "#ef4444";
+                ctx.fill();
+
+                // Center Dot
+                ctx.beginPath();
+                ctx.arc(target.x, target.y, target.radius * 0.2, 0, Math.PI*2);
+                ctx.fillStyle = "white";
+                ctx.fill();
+            }
+
+            // Draw Trail
+            if (ball.trail.length > 0) {
+                ctx.beginPath();
+                ctx.moveTo(ball.trail[0].x, ball.trail[0].y);
+                for (let i = 1; i < ball.trail.length; i++) {
+                    ctx.lineTo(ball.trail[i].x, ball.trail[i].y);
+                }
+                ctx.strokeStyle = "rgba(50, 50, 50, 0.3)";
+                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Draw Ball
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = "#1e293b";
+            ctx.fill();
+
+            // Draw Cannon
+            ctx.save();
+            ctx.translate(cannon.x, cannon.y);
+            
+            // Təkər
+            ctx.beginPath();
+            ctx.arc(0, 5, 12, 0, Math.PI*2);
+            ctx.fillStyle = "#475569"; // wheel color
+            ctx.fill();
+            ctx.strokeStyle = "#1e293b";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Spokes
+            ctx.beginPath();
+            ctx.moveTo(-10, 5); ctx.lineTo(10, 5);
+            ctx.moveTo(0, -5); ctx.lineTo(0, 15);
+            ctx.stroke();
+
+            // Barrel
+            ctx.rotate(-cannon.angle * Math.PI / 180);
+            ctx.fillStyle = "#334155";
+            ctx.beginPath();
+            ctx.roundRect(0, -10, 45, 20, 4);
+            ctx.fill();
+            
+            // Barrel Details
+            ctx.fillStyle = "#1e293b";
+            ctx.fillRect(5, -10, 5, 20);
+            
+            ctx.restore();
+
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            });
+        }
+
+        // --- Inputs ---
+        angleSlider.addEventListener('input', (e) => {
+            angleVal.textContent = `${e.target.value}°`;
+            cannon.angle = parseInt(e.target.value);
+            draw();
+        });
+
+        powerSlider.addEventListener('input', (e) => {
+            powerVal.textContent = `${e.target.value}%`;
+        });
+
+        fireBtn.addEventListener('click', fire);
+        resetBtn.addEventListener('click', () => {
+            score = 0;
+            scoreDisplay.textContent = "0";
+            respawnTarget();
+            resetBall();
+        });
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            draw();
+        });
+
+        // Start
+        resizeCanvas();
+        updateWind(); // İlk küləyi təyin et
+        loop(); // Animasiya dövrünü başlat (buludlar üçün)
+
+    </script>
+</body>
+</html>
